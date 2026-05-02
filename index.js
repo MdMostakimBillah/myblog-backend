@@ -14,7 +14,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://myblog-frontend-blush.vercel.app",
+    "https://my-speach.vercel.app",
     "https://myblog-frontend-fyhtjhjki-mdmostakimbillahs-projects.vercel.app"
   ]
 }));
