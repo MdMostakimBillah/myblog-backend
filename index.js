@@ -14,7 +14,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://your-blog.vercel.app"  // deploy এর পরে actual URL দিয়ে বদলাবেন
+    "https://myblog-frontend.vercel.app"  
   ]
 }));
 app.use(express.json({ limit: '50mb' }));
