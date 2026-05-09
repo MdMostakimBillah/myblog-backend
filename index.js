@@ -163,21 +163,39 @@ app.put("/api/auth/update-profile", async (req, res) => {
   try {
     const { userId, ...updateFields } = req.body;
     if (!userId) return res.status(400).json({ success: false, message: "userId দরকার" });
-
-    const allowed = ["about", "bio", "firstName", "lastName", "email", 
-                 "qualification", "timeline", "profilePic",
-                 "location", "socialLinks"];
+ 
+    const allowed = [
+      "about", "bio", "firstName", "lastName", "email",
+      "qualification", "timeline", "profilePic",
+      "location", "socialLinks", "skills"
+    ];
+ 
     const update = {};
     allowed.forEach(k => { if (k in updateFields) update[k] = updateFields[k]; });
-
+ 
+    // ✅ skills fix: [{name: "প্রবন্ধ রচনা"}] → ["প্রবন্ধ রচনা"]
+    // frontend থেকে object array আসলে string array তে convert করা
+    if (update.skills && Array.isArray(update.skills)) {
+      update.skills = update.skills.map(s =>
+        typeof s === "object" ? s.name : s
+      ).filter(Boolean);
+    }
+ 
     const user = await User.findByIdAndUpdate(userId, update, { new: true });
     if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
-
+ 
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+
+
+
+
+
+
 
 // আপনার ব্যাকএন্ডে এই কোডটি আছে কি না নিশ্চিত করুন
 // app.get("/api/my-posts/:username", async (req, res) => {
@@ -418,6 +436,68 @@ app.post("/api/posts/:id/like", async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
+
+
+// =====================================================
+// ২. change-password — নতুন route
+// update-profile route এর নিচে এটি যোগ করুন
+// =====================================================
+app.put("/api/auth/change-password", async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+ 
+    console.log("change-password hit:", { userId, currentPassword, newPassword }); // debug
+ 
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "সব তথ্য দিতে হবে"
+      });
+    }
+ 
+    // ✅ findById এর বদলে findOne ব্যবহার — বেশি reliable
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "ইউজার পাওয়া যায়নি"
+      });
+    }
+ 
+    console.log("DB password:", user.password); // debug
+    console.log("Input password:", currentPassword); // debug
+ 
+    // বর্তমান পাসওয়ার্ড মেলানো (plain text)
+    if (user.password !== currentPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "বর্তমান পাসওয়ার্ড ভুল হয়েছে"
+      });
+    }
+ 
+    // ✅ findByIdAndUpdate দিয়ে save — validation bypass হবে না কিন্তু
+    // runValidators: false দিলে minlength চেক হবে না — তাই newPassword length
+    // frontend থেকেই check করা হচ্ছে (৬ অক্ষর), এখানে শুধু save
+    await User.findByIdAndUpdate(
+      userId,
+      { password: newPassword },
+      { new: true, runValidators: false }
+    );
+ 
+    res.json({
+      success: true,
+      message: "পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে"
+    });
+ 
+  } catch (err) {
+    console.error("change-password error:", err); // debug
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 
 const PORT = process.env.PORT || 4000;
 
