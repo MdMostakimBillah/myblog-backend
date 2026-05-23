@@ -84,15 +84,47 @@ app.post("/api/posts", (req, res) => {
 })
 
 
+// app.get("/api/posts", async (req, res) => {
+//   try {
+//     const page  = parseInt(req.query.page)  || 1;
+//     const limit = parseInt(req.query.limit) || 9;
+//     const skip  = (page - 1) * limit;
+//     const topic = req.query.topic;
+
+//     const query = { status: "publish" };
+//     if (topic) query.topic = topic;
+
+//     const posts = await Post.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limit)
+//       .select("-content");
+
+//     const total = await Post.countDocuments(query);
+
+//     res.json({
+//       success: true,
+//       posts,
+//       currentPage: page,
+//       totalPages: Math.ceil(total / limit),
+//       hasMore: page < Math.ceil(total / limit),
+//     });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// });
+
 app.get("/api/posts", async (req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 9;
-    const skip  = (page - 1) * limit;
-    const topic = req.query.topic;
+    const page   = parseInt(req.query.page)   || 1;
+    const limit  = parseInt(req.query.limit)  || 9;
+    const skip   = (page - 1) * limit;
+    const topic  = req.query.topic;
+    const topics = req.query.topics; // ✅ multiple topics
 
     const query = { status: "publish" };
-    if (topic) query.topic = topic;
+    if (topic)  query.topic = topic;
+    if (topics) query.topic = { $in: topics.split(",") }; // ✅ comma separated
 
     const posts = await Post.find(query)
       .sort({ createdAt: -1 })
