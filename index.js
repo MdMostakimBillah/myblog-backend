@@ -84,6 +84,36 @@ app.post("/api/posts", (req, res) => {
 })
 
 
+app.get("/api/posts", async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 9;
+    const skip  = (page - 1) * limit;
+    const topic = req.query.topic;
+
+    const query = { status: "publish" };
+    if (topic) query.topic = topic;
+
+    const posts = await Post.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("-content");
+
+    const total = await Post.countDocuments(query);
+
+    res.json({
+      success: true,
+      posts,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      hasMore: page < Math.ceil(total / limit),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Get data from backend single id
 app.get("/api/posts/:id", async (req, res) => {
   try {
@@ -110,32 +140,7 @@ app.get("/api/posts/:id", async (req, res) => {
   }
 });
 
-app.get("/api/posts", async (req, res) => {
-  try{
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 9;
-    const skip = (page - 1) * limit;
 
-    const posts = await Post.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select('-content');
-    
-    const total = await Post.countDocuments();
-
-    res.json({
-      success: true,
-      posts,
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
-      hasMore: page < Math.ceil(total / limit)
-    });
-
-  }catch(error){
-    res.status(500).json({ success: false, message: error.message });
-  }
-})
 
 // এটি আপনার Post Manage পেজের জন্য কাজ করবে
 app.get("/api/my-posts/:username", async (req, res) => {
