@@ -115,6 +115,9 @@ app.post("/api/posts", (req, res) => {
 // });
 
 app.get("/api/posts", async (req, res) => {
+  const topics = req.query.topics;
+  console.log("topics query:", topics);
+  console.log("query object:", req.query);
   try {
     const page   = parseInt(req.query.page)   || 1;
     const limit  = parseInt(req.query.limit)  || 9;
