@@ -74,6 +74,10 @@ const userSchema = new mongoose.Schema({
         youtube: { type: String, default: "" },
         facebook: { type: String, default: "" },
     },
+    permissions: {
+        type: [String],
+        default: []
+    }
 }, {
     timestamps: true   
 });

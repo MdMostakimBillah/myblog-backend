@@ -193,6 +193,39 @@ app.get("/api/my-posts/:username", async (req, res) => {
 });
 
 
+// Admin যেকোনো user কে permission দিতে পারবে
+app.put("/api/auth/update-permission", async (req, res) => {
+  try {
+    const { username, permission } = req.body;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
+
+    if (!user.permissions.includes(permission)) {
+      user.permissions.push(permission);
+      await user.save();
+    }
+
+    res.json({ success: true, message: "Permission দেওয়া হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin যেকোনো user এর permission বাতিল করতে পারবে
+app.put("/api/auth/remove-permission", async (req, res) => {
+  try {
+    const { username, permission } = req.body;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
+
+    user.permissions = user.permissions.filter(p => p !== permission);
+    await user.save();
+
+    res.json({ success: true, message: "Permission বাতিল করা হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 // app.put("/api/auth/update-profile", async (req, res) => {
 //   const { userId, about } = req.body;
 //   await User.findByIdAndUpdate(userId, { about: about });
@@ -431,7 +464,8 @@ app.post("/api/auth/login", async (req, res) => {
                 about: user.about,
                 skills: user.skills,
                 profilePic: user.profilePic,
-                role: user.role
+                role: user.role,
+                permissions: user.permissions,
             }
         });
 
