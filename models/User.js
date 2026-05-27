@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema({
         default: ""
     },
     about: {
-        type: String, 
+        type: String,
         default: "",
         trim: true
     },
@@ -47,14 +47,14 @@ const userSchema = new mongoose.Schema({
     },
     profilePic: {
         type: String,
-        default: ""   
+        default: ""
     },
     role: {
         type: String,
         enum: ["user", "admin"],
         default: "user"
-    }, 
-    bio: { 
+    },
+    bio: {
         type: String,
         default: "আমি খুবই সাধারণ একজন লেখক...",
         trim: true
@@ -77,9 +77,17 @@ const userSchema = new mongoose.Schema({
     permissions: {
         type: [String],
         default: []
+    },
+    pendingPermissions: {
+        type: [{
+            permission: String,
+            from: String, // কে দিয়েছে
+            createdAt: { type: Date, default: Date.now }
+        }],
+        default: []
     }
 }, {
-    timestamps: true   
+    timestamps: true
 });
 
 userSchema.index({ username: 1 }, { unique: true });

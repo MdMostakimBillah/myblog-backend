@@ -114,20 +114,63 @@ app.post("/api/posts", (req, res) => {
 //   }
 // });
 
+// app.get("/api/posts", async (req, res) => {
+//   const topics = req.query.topics;
+//   console.log("topics query:", topics);
+//   console.log("query object:", req.query);
+//   try {
+//     const page   = parseInt(req.query.page)   || 1;
+//     const limit  = parseInt(req.query.limit)  || 9;
+//     const skip   = (page - 1) * limit;
+//     const topic  = req.query.topic;
+//     const topics = req.query.topics; // ✅ multiple topics
+
+//     const query = { status: "publish" };
+//     if (topic)  query.topic = topic;
+//     if (topics) query.topic = { $in: topics.split(",") }; // ✅ comma separated
+
+//     const posts = await Post.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limit)
+//       .select("-content");
+
+//     const total = await Post.countDocuments(query);
+
+//     res.json({
+//       success: true,
+//       posts,
+//       currentPage: page,
+//       totalPages: Math.ceil(total / limit),
+//       hasMore: page < Math.ceil(total / limit),
+//     });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// });
+
+// ✅ এই অংশটা replace করো
 app.get("/api/posts", async (req, res) => {
-  const topics = req.query.topics;
-  console.log("topics query:", topics);
-  console.log("query object:", req.query);
   try {
     const page   = parseInt(req.query.page)   || 1;
     const limit  = parseInt(req.query.limit)  || 9;
     const skip   = (page - 1) * limit;
     const topic  = req.query.topic;
-    const topics = req.query.topics; // ✅ multiple topics
+    const topics = req.query.topics;
+    const skill  = req.query.skill; // ✅ নতুন
 
     const query = { status: "publish" };
     if (topic)  query.topic = topic;
-    if (topics) query.topic = { $in: topics.split(",") }; // ✅ comma separated
+    if (topics) query.topic = { $in: topics.split(",") };
+
+    // ✅ skill filter — authorName এর posts যেখানে skill match করে
+    if (skill) {
+      // skill সম্পর্কিত posts খুঁজতে হলে author এর skills check করতে হবে
+      // তাই আগে সেই skill আছে এমন users খুঁজি
+      const usersWithSkill = await User.find({ skills: skill }).select("username");
+      const usernames = usersWithSkill.map(u => u.username);
+      query.authorName = { $in: usernames };
+    }
 
     const posts = await Post.find(query)
       .sort({ createdAt: -1 })
@@ -146,6 +189,71 @@ app.get("/api/posts", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Permission দেওয়া — সরাসরি না, pending এ রাখা
+app.put("/api/auth/update-permission", async (req, res) => {
+  try {
+    const { username, permission, from } = req.body;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
+
+    // আগে থেকে আছে কিনা চেক
+    const alreadyHas = user.permissions.includes(permission);
+    const alreadyPending = user.pendingPermissions.some(p => p.permission === permission);
+
+    if (alreadyHas || alreadyPending) {
+      return res.json({ success: false, message: "ইতিমধ্যে আছে বা অপেক্ষমান" });
+    }
+
+    user.pendingPermissions.push({ permission, from });
+    await user.save();
+
+    res.json({ success: true, message: "অনুরোধ পাঠানো হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Permission accept
+app.put("/api/auth/accept-permission", async (req, res) => {
+  try {
+    const { userId, permission } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false });
+
+    // pending থেকে সরাও
+    user.pendingPermissions = user.pendingPermissions.filter(
+      p => p.permission !== permission
+    );
+    // permissions এ যোগ করো
+    if (!user.permissions.includes(permission)) {
+      user.permissions.push(permission);
+    }
+    await user.save();
+
+    res.json({ success: true, message: "Permission গ্রহণ করা হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Permission decline
+app.put("/api/auth/decline-permission", async (req, res) => {
+  try {
+    const { userId, permission } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false });
+
+    user.pendingPermissions = user.pendingPermissions.filter(
+      p => p.permission !== permission
+    );
+    await user.save();
+
+    res.json({ success: true, message: "Permission প্রত্যাখ্যান করা হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -402,6 +510,7 @@ app.post("/api/auth/register", async (req, res) => {
                 username: newUser.username,
                 email: newUser.email,
                 profilePic: newUser.profilePic // ৩. রেসপন্সেও ছবি পাঠানো হচ্ছে
+
             }
         });
 
@@ -466,6 +575,7 @@ app.post("/api/auth/login", async (req, res) => {
                 profilePic: user.profilePic,
                 role: user.role,
                 permissions: user.permissions,
+                pendingPermissions: user.pendingPermissions,
             }
         });
 
