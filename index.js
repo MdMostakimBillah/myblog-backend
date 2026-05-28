@@ -192,30 +192,6 @@ app.get("/api/posts", async (req, res) => {
   }
 });
 
-// Permission দেওয়া — সরাসরি না, pending এ রাখা
-app.put("/api/auth/update-permission", async (req, res) => {
-  try {
-    const { username, permission, from } = req.body;
-    const user = await User.findOne({ username });
-    if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
-
-    // আগে থেকে আছে কিনা চেক
-    const alreadyHas = user.permissions.includes(permission);
-    const alreadyPending = user.pendingPermissions.some(p => p.permission === permission);
-
-    if (alreadyHas || alreadyPending) {
-      return res.json({ success: false, message: "ইতিমধ্যে আছে বা অপেক্ষমান" });
-    }
-
-    user.pendingPermissions.push({ permission, from });
-    await user.save();
-
-    res.json({ success: true, message: "অনুরোধ পাঠানো হয়েছে" });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 // Permission accept
 app.put("/api/auth/accept-permission", async (req, res) => {
   try {
@@ -223,17 +199,14 @@ app.put("/api/auth/accept-permission", async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false });
 
-    // pending থেকে সরাও
     user.pendingPermissions = user.pendingPermissions.filter(
       p => p.permission !== permission
     );
-    // permissions এ যোগ করো
     if (!user.permissions.includes(permission)) {
       user.permissions.push(permission);
     }
     await user.save();
-
-    res.json({ success: true, message: "Permission গ্রহণ করা হয়েছে" });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -250,8 +223,36 @@ app.put("/api/auth/decline-permission", async (req, res) => {
       p => p.permission !== permission
     );
     await user.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    res.json({ success: true, message: "Permission প্রত্যাখ্যান করা হয়েছে" });
+// Permission revoke — যে দিয়েছে সে বাতিল করবে
+app.put("/api/auth/revoke-permission", async (req, res) => {
+  try {
+    const { username, permission } = req.body;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ success: false });
+
+    user.permissions = user.permissions.filter(p => p !== permission);
+    await user.save();
+    res.json({ success: true, message: "Permission বাতিল হয়েছে" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// যাদের নির্দিষ্ট permission আছে তাদের list
+app.get("/api/auth/permission-list", async (req, res) => {
+  try {
+    const { permission } = req.query;
+    const users = await User.find(
+      { permissions: permission },
+      "username firstName lastName profilePic"
+    );
+    res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -304,16 +305,23 @@ app.get("/api/my-posts/:username", async (req, res) => {
 // Admin যেকোনো user কে permission দিতে পারবে
 app.put("/api/auth/update-permission", async (req, res) => {
   try {
-    const { username, permission } = req.body;
+    const { username, permission, from } = req.body;
     const user = await User.findOne({ username });
     if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
 
-    if (!user.permissions.includes(permission)) {
-      user.permissions.push(permission);
-      await user.save();
+    // আগে থেকে আছে কিনা চেক
+    const alreadyHas     = user.permissions.includes(permission);
+    const alreadyPending = user.pendingPermissions?.some(p => p.permission === permission);
+
+    if (alreadyHas || alreadyPending) {
+      return res.json({ success: false, message: "ইতিমধ্যে আছে বা অপেক্ষমান" });
     }
 
-    res.json({ success: true, message: "Permission দেওয়া হয়েছে" });
+    // ✅ সরাসরি না — pending এ রাখো
+    user.pendingPermissions.push({ permission, from });
+    await user.save();
+
+    res.json({ success: true, message: "অনুরোধ পাঠানো হয়েছে" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
