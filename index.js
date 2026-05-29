@@ -164,12 +164,15 @@ app.get("/api/posts", async (req, res) => {
     if (topics) query.topic = { $in: topics.split(",") };
 
     // ✅ skill filter — authorName এর posts যেখানে skill match করে
+    // if (skill) {
+    //   // skill সম্পর্কিত posts খুঁজতে হলে author এর skills check করতে হবে
+    //   // তাই আগে সেই skill আছে এমন users খুঁজি
+    //   const usersWithSkill = await User.find({ skills: skill }).select("username");
+    //   const usernames = usersWithSkill.map(u => u.username);
+    //   query.authorName = { $in: usernames };
+    // }
     if (skill) {
-      // skill সম্পর্কিত posts খুঁজতে হলে author এর skills check করতে হবে
-      // তাই আগে সেই skill আছে এমন users খুঁজি
-      const usersWithSkill = await User.find({ skills: skill }).select("username");
-      const usernames = usersWithSkill.map(u => u.username);
-      query.authorName = { $in: usernames };
+      query.topic = `skill:${skill}`;
     }
 
     const posts = await Post.find(query)
