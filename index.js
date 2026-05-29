@@ -391,40 +391,57 @@ app.post("/api/ai/summary", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ success: false });
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          max_tokens: 300,
+          messages: [
+            {
+              role: "system",
+              content: `You are a professional content rewriter and blog preview writer. I will provide a story, article, paragraph, or mixed Bangla-English writing. Your task is to rewrite the content into a short, engaging, and emotionally accurate preview within 70-80 words. If Bangla 150 words. If English 100 words max. The preview should capture the essence and tone of the original content while being concise and compelling.
+
+              Purpose:
+
+              * This text will be used inside a blog card or preview section.
+              * It should briefly capture the main idea while creating curiosity and interest so readers feel motivated to read the full blog.
+
+              Language Rules:
+
+              * If the original content is fully in Bangla, write the output fully in Bangla.
+              * If the original content is fully in English, write the output fully in English.
+              * If the content contains both Bangla and English, use a natural mixed style where appropriate.
+
+              Writing Rules:
+
+              * Do not write a full summary or detailed explanation.
+              * Keep the core emotion, tone, and message of the original content.
+              * Make it concise, smooth, and highly engaging.
+              * If the content is emotional, make the preview emotional.
+              * If it is sad, use a sorrowful tone.
+              * If it is motivational, make it inspiring.
+              * If it is suspenseful or thoughtful, maintain that feeling.
+              * Avoid introductions, conclusions, and unnecessary details.
+              * The writing should feel human, modern, and hook the reader emotionally or mentally.
+              * Maximum length: English 100 words and Bangla 150 words.
+
+              `,
+            },
+            {
+              role: "user",
+              content: text,
+            },
+          ],
+          max_tokens: 400,
+        }),
       },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 300,
-        messages: [
-          {
-            role: "system",
-            content: `তুমি একজন পেশাদার বাংলা লেখক ও সারসংক্ষেপকারী। তোমাকে যেকোনো বাংলা লেখা — গল্প, প্রবন্ধ, নিবন্ধ বা অনুচ্ছেদ দেওয়া হবে। তোমার কাজ হলো সর্বোচ্চ ২০০ শব্দের মধ্যে একটি পূর্ণাঙ্গ ও অর্থবহ সারমর্ম তৈরি করা।
-            সারমর্ম লেখার নিয়ম:
-            — মূল লেখার সারকথা ও মূলবার্তা সম্পূর্ণরূপে তুলে ধরবে
-            — গুরুত্বপূর্ণ বিষয়গুলো সংক্ষিপ্ত ও স্পষ্টভাবে উপস্থাপন করবে
-            — আলাদা ভূমিকা বা উপসংহার লিখবে না
-            — প্রাঞ্জল ও সাবলীল বাংলায় লিখবে
-            — মূল লেখার আবেগ, সুর ও ভাষাশৈলী অক্ষুণ্ণ রাখবে:
-              • আবেগময় লেখা হলে — আবেগ ধরে রাখবে
-              • বিষাদময় হলে — বিষণ্ণ সুরে লিখবে
-              • অনুরোধমূলক হলে — বিনয়ী ভাষায় লিখবে
-              • অনুপ্রেরণামূলক হলে — উদ্দীপনা বজায় রাখবে
-            — অপ্রয়োজনীয় বিস্তারিত, পুনরাবৃত্তি ও অতিরিক্ত ব্যাখ্যা এড়িয়ে চলবে
-            — চূড়ান্ত আউটপুট যেন ২০০ শব্দের মধ্যে একটি স্বয়ংসম্পূর্ণ সারমর্ম মনে হয়`
-          },
-          {
-            role: "user",
-            content: text
-          }
-        ],
-        max_tokens: 400,
-      })
-    });
+    );
 
     const data = await response.json();
     const summary = data.choices?.[0]?.message?.content || "";
