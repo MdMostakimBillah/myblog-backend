@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 
 import Post from "./models/Post.js";
 import User from "./models/User.js";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -152,15 +153,15 @@ app.post("/api/posts", (req, res) => {
 // ✅ এই অংশটা replace করো
 app.get("/api/posts", async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)   || 1;
-    const limit  = parseInt(req.query.limit)  || 9;
-    const skip   = (page - 1) * limit;
-    const topic  = req.query.topic;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 9;
+    const skip = (page - 1) * limit;
+    const topic = req.query.topic;
     const topics = req.query.topics;
-    const skill  = req.query.skill; // ✅ নতুন
+    const skill = req.query.skill; // ✅ নতুন
 
     const query = { status: "publish" };
-    if (topic)  query.topic = topic;
+    if (topic) query.topic = topic;
     if (topics) query.topic = { $in: topics.split(",") };
 
     // ✅ skill filter — authorName এর posts যেখানে skill match করে
@@ -268,9 +269,9 @@ app.get("/api/posts/:id", async (req, res) => {
     const post = await Post.findById(req.params.id).populate("authorId", "firstName lastName profilePic");
 
     if (!post) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "পোস্ট পাওয়া যায়নি" 
+      return res.status(404).json({
+        success: false,
+        message: "পোস্ট পাওয়া যায়নি"
       });
     }
 
@@ -280,9 +281,9 @@ app.get("/api/posts/:id", async (req, res) => {
     });
   } catch (err) {
     console.log("Single post error:", err.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "সার্ভারে সমস্যা হয়েছে" 
+    res.status(500).json({
+      success: false,
+      message: "সার্ভারে সমস্যা হয়েছে"
     });
   }
 });
@@ -292,7 +293,7 @@ app.get("/api/posts/:id", async (req, res) => {
 // এটি আপনার Post Manage পেজের জন্য কাজ করবে
 app.get("/api/my-posts/:username", async (req, res) => {
   try {
-   
+
     const posts = await Post.find({ authorName: req.params.username }).sort({ createdAt: -1 });
 
     res.json({
@@ -313,7 +314,7 @@ app.put("/api/auth/update-permission", async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
 
     // আগে থেকে আছে কিনা চেক
-    const alreadyHas     = user.permissions.includes(permission);
+    const alreadyHas = user.permissions.includes(permission);
     const alreadyPending = user.pendingPermissions?.some(p => p.permission === permission);
 
     if (alreadyHas || alreadyPending) {
@@ -355,16 +356,16 @@ app.put("/api/auth/update-profile", async (req, res) => {
   try {
     const { userId, ...updateFields } = req.body;
     if (!userId) return res.status(400).json({ success: false, message: "userId দরকার" });
- 
+
     const allowed = [
       "about", "bio", "firstName", "lastName", "email",
       "qualification", "timeline", "profilePic",
       "location", "socialLinks", "skills"
     ];
- 
+
     const update = {};
     allowed.forEach(k => { if (k in updateFields) update[k] = updateFields[k]; });
- 
+
     // ✅ skills fix: [{name: "প্রবন্ধ রচনা"}] → ["প্রবন্ধ রচনা"]
     // frontend থেকে object array আসলে string array তে convert করা
     if (update.skills && Array.isArray(update.skills)) {
@@ -372,10 +373,10 @@ app.put("/api/auth/update-profile", async (req, res) => {
         typeof s === "object" ? s.name : s
       ).filter(Boolean);
     }
- 
+
     const user = await User.findByIdAndUpdate(userId, update, { new: true });
     if (!user) return res.status(404).json({ success: false, message: "ইউজার পাওয়া যায়নি" });
- 
+
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -385,9 +386,82 @@ app.put("/api/auth/update-profile", async (req, res) => {
 
 
 
+app.post("/api/ai/summary", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ success: false });
 
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        max_tokens: 300,
+        messages: [
+          {
+            role: "system",
+            content: `তুমি একজন পেশাদার বাংলা লেখক ও সারসংক্ষেপকারী। তোমাকে যেকোনো বাংলা লেখা — গল্প, প্রবন্ধ, নিবন্ধ বা অনুচ্ছেদ দেওয়া হবে। তোমার কাজ হলো সর্বোচ্চ ২০০ শব্দের মধ্যে একটি পূর্ণাঙ্গ ও অর্থবহ সারমর্ম তৈরি করা।
+            সারমর্ম লেখার নিয়ম:
+            — মূল লেখার সারকথা ও মূলবার্তা সম্পূর্ণরূপে তুলে ধরবে
+            — গুরুত্বপূর্ণ বিষয়গুলো সংক্ষিপ্ত ও স্পষ্টভাবে উপস্থাপন করবে
+            — আলাদা ভূমিকা বা উপসংহার লিখবে না
+            — প্রাঞ্জল ও সাবলীল বাংলায় লিখবে
+            — মূল লেখার আবেগ, সুর ও ভাষাশৈলী অক্ষুণ্ণ রাখবে:
+              • আবেগময় লেখা হলে — আবেগ ধরে রাখবে
+              • বিষাদময় হলে — বিষণ্ণ সুরে লিখবে
+              • অনুরোধমূলক হলে — বিনয়ী ভাষায় লিখবে
+              • অনুপ্রেরণামূলক হলে — উদ্দীপনা বজায় রাখবে
+            — অপ্রয়োজনীয় বিস্তারিত, পুনরাবৃত্তি ও অতিরিক্ত ব্যাখ্যা এড়িয়ে চলবে
+            — চূড়ান্ত আউটপুট যেন ২০০ শব্দের মধ্যে একটি স্বয়ংসম্পূর্ণ সারমর্ম মনে হয়`
+          },
+          {
+            role: "user",
+            content: text
+          }
+        ],
+        max_tokens: 400,
+      })
+    });
 
+    const data = await response.json();
+    const summary = data.choices?.[0]?.message?.content || "";
+    res.json({ success: true, summary });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
+// ── Auto publish cron job ──
+// প্রতি ঘণ্টায় একবার চেক করবে
+cron.schedule("0 * * * *", async () => {
+    try {
+        const today = new Date().toISOString().split("T")[0];
+        
+        // যেসব post unpublish আছে এবং তারিখ আজকের বা আগের
+        const postsToPublish = await Post.find({
+            status: "unpublish",
+            date: { $lte: today }
+        });
+
+        if (postsToPublish.length === 0) return;
+
+        // সবগুলো publish করো
+        await Post.updateMany(
+            { 
+                status: "unpublish",
+                date: { $lte: today }
+            },
+            { $set: { status: "publish" } }
+        );
+
+        console.log(`✅ ${postsToPublish.length} টি পোস্ট auto publish হয়েছে`);
+    } catch (err) {
+        console.error("Auto publish error:", err.message);
+    }
+});
 
 // আপনার ব্যাকএন্ডে এই কোডটি আছে কি না নিশ্চিত করুন
 // app.get("/api/my-posts/:username", async (req, res) => {
@@ -475,161 +549,161 @@ app.put("/api/posts/:id", async (req, res) => {
 
 // ====================== AUTH ROUTES ======================
 app.post("/api/auth/register", async (req, res) => {
-    try {
-        // ১. এখানে profilePic যোগ করা হয়েছে
-        const { firstName, lastName, username, email, password, qualification, about, skills, profilePic } = req.body;
+  try {
+    // ১. এখানে profilePic যোগ করা হয়েছে
+    const { firstName, lastName, username, email, password, qualification, about, skills, profilePic } = req.body;
 
-        // Basic validation
-        if (!username || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Username, Email এবং Password দিতে হবে"
-            });
-        }
-
-        // Check if user already exists
-        const existingUser = await User.findOne({ 
-            $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }] 
-        });
-
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: "এই ইমেইল অথবা ইউজারনেম ইতিমধ্যে ব্যবহৃত হয়েছে"
-            });
-        }
-
-        const newUser = new User({
-            firstName,
-            lastName,
-            username: username.toLowerCase(),
-            email: email.toLowerCase(),
-            password,                    // পরে bcrypt দিয়ে hash করবো
-            qualification,
-            about,
-            skills: skills || [],
-            profilePic: profilePic || "" // ২. এখানে ডাটাবেজে সেভ করার জন্য profilePic দেওয়া হয়েছে
-        });
-
-        await newUser.save();
-
-        res.status(201).json({
-            success: true,
-            message: "অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে",
-            user: {
-                id: newUser._id,
-                username: newUser.username,
-                email: newUser.email,
-                profilePic: newUser.profilePic // ৩. রেসপন্সেও ছবি পাঠানো হচ্ছে
-
-            }
-        });
-
-    } catch (error) {
-        console.error("Register Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।"
-        });
+    // Basic validation
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, Email এবং Password দিতে হবে"
+      });
     }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }]
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "এই ইমেইল অথবা ইউজারনেম ইতিমধ্যে ব্যবহৃত হয়েছে"
+      });
+    }
+
+    const newUser = new User({
+      firstName,
+      lastName,
+      username: username.toLowerCase(),
+      email: email.toLowerCase(),
+      password,                    // পরে bcrypt দিয়ে hash করবো
+      qualification,
+      about,
+      skills: skills || [],
+      profilePic: profilePic || "" // ২. এখানে ডাটাবেজে সেভ করার জন্য profilePic দেওয়া হয়েছে
+    });
+
+    await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: "অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে",
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        profilePic: newUser.profilePic // ৩. রেসপন্সেও ছবি পাঠানো হচ্ছে
+
+      }
+    });
+
+  } catch (error) {
+    console.error("Register Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।"
+    });
+  }
 });
 
 
 // ==================== LOGIN ROUTE ====================
 app.post("/api/auth/login", async (req, res) => {
-    try {
-        const { identifier, password } = req.body;
+  try {
+    const { identifier, password } = req.body;
 
-        if (!identifier || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Username/Email এবং Password দিতে হবে"
-            });
-        }
-
-        // Username অথবা Email দিয়ে খুঁজে বের করা
-        const user = await User.findOne({
-            $or: [
-                { username: identifier.toLowerCase() },
-                { email: identifier.toLowerCase() }
-            ]
-        });
-
-        if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: "এই ইউজারনেম/ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি"
-            });
-        }
-
-        // Password চেক (এখন plain text — পরে bcrypt দিয়ে hash করবো)
-        if (user.password !== password) {
-            return res.status(400).json({
-                success: false,
-                message: "পাসওয়ার্ড ভুল হয়েছে"
-            });
-        }
-
-        // লগইন সফল
-        res.status(200).json({
-            success: true,
-            message: "লগইন সফল হয়েছে",
-            user: {
-                id: user._id,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                username: user.username,
-                email: user.email,
-                qualification: user.qualification,
-                about: user.about,
-                skills: user.skills,
-                profilePic: user.profilePic,
-                role: user.role,
-                permissions: user.permissions,
-                pendingPermissions: user.pendingPermissions,
-            }
-        });
-
-    } catch (error) {
-        console.error("Login Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "সার্ভারে সমস্যা হয়েছে"
-        });
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Username/Email এবং Password দিতে হবে"
+      });
     }
+
+    // Username অথবা Email দিয়ে খুঁজে বের করা
+    const user = await User.findOne({
+      $or: [
+        { username: identifier.toLowerCase() },
+        { email: identifier.toLowerCase() }
+      ]
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "এই ইউজারনেম/ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি"
+      });
+    }
+
+    // Password চেক (এখন plain text — পরে bcrypt দিয়ে hash করবো)
+    if (user.password !== password) {
+      return res.status(400).json({
+        success: false,
+        message: "পাসওয়ার্ড ভুল হয়েছে"
+      });
+    }
+
+    // লগইন সফল
+    res.status(200).json({
+      success: true,
+      message: "লগইন সফল হয়েছে",
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        qualification: user.qualification,
+        about: user.about,
+        skills: user.skills,
+        profilePic: user.profilePic,
+        role: user.role,
+        permissions: user.permissions,
+        pendingPermissions: user.pendingPermissions,
+      }
+    });
+
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "সার্ভারে সমস্যা হয়েছে"
+    });
+  }
 });
 
 // user account 
 app.get("/api/auth/user-profile/:username", async (req, res) => {
-    const user = await User.findOne({ username: req.params.username });
-    if (!user) return res.status(404).json({ success: false });
-    
-    // ঐ ইউজারের সব পোস্ট খুঁজে বের করা
-    const posts = await Post.find({ authorName: req.params.username });
-    
-    res.json({ success: true, user, posts }); 
+  const user = await User.findOne({ username: req.params.username });
+  if (!user) return res.status(404).json({ success: false });
+
+  // ঐ ইউজারের সব পোস্ট খুঁজে বের করা
+  const posts = await Post.find({ authorName: req.params.username });
+
+  res.json({ success: true, user, posts });
 });
 
 
 app.post("/api/posts/:id/like", async (req, res) => {
-    try {
-        const { userId } = req.body;
-        const post = await Post.findById(req.params.id);
+  try {
+    const { userId } = req.body;
+    const post = await Post.findById(req.params.id);
 
-        if (!post.likes.includes(userId)) {
-            // যদি আগে লাইক না দিয়ে থাকে, তবে আইডি পুশ করো
-            post.likes.push(userId);
-            await post.save();
-            return res.json({ success: true, message: "Liked", likesCount: post.likes.length });
-        } else {
-            // যদি আগে লাইক দিয়ে থাকে, তবে লাইক রিমুভ করো (Toggle)
-            post.likes = post.likes.filter(id => id.toString() !== userId);
-            await post.save();
-            return res.json({ success: true, message: "Unliked", likesCount: post.likes.length });
-        }
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+    if (!post.likes.includes(userId)) {
+      // যদি আগে লাইক না দিয়ে থাকে, তবে আইডি পুশ করো
+      post.likes.push(userId);
+      await post.save();
+      return res.json({ success: true, message: "Liked", likesCount: post.likes.length });
+    } else {
+      // যদি আগে লাইক দিয়ে থাকে, তবে লাইক রিমুভ করো (Toggle)
+      post.likes = post.likes.filter(id => id.toString() !== userId);
+      await post.save();
+      return res.json({ success: true, message: "Unliked", likesCount: post.likes.length });
     }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 
@@ -640,16 +714,16 @@ app.post("/api/posts/:id/like", async (req, res) => {
 app.put("/api/auth/change-password", async (req, res) => {
   try {
     const { userId, currentPassword, newPassword } = req.body;
- 
+
     console.log("change-password hit:", { userId, currentPassword, newPassword }); // debug
- 
+
     if (!userId || !currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
         message: "সব তথ্য দিতে হবে"
       });
     }
- 
+
     // ✅ findById এর বদলে findOne ব্যবহার — বেশি reliable
     const user = await User.findOne({ _id: userId });
     if (!user) {
@@ -658,10 +732,10 @@ app.put("/api/auth/change-password", async (req, res) => {
         message: "ইউজার পাওয়া যায়নি"
       });
     }
- 
+
     console.log("DB password:", user.password); // debug
     console.log("Input password:", currentPassword); // debug
- 
+
     // বর্তমান পাসওয়ার্ড মেলানো (plain text)
     if (user.password !== currentPassword) {
       return res.status(400).json({
@@ -669,7 +743,7 @@ app.put("/api/auth/change-password", async (req, res) => {
         message: "বর্তমান পাসওয়ার্ড ভুল হয়েছে"
       });
     }
- 
+
     // ✅ findByIdAndUpdate দিয়ে save — validation bypass হবে না কিন্তু
     // runValidators: false দিলে minlength চেক হবে না — তাই newPassword length
     // frontend থেকেই check করা হচ্ছে (৬ অক্ষর), এখানে শুধু save
@@ -678,12 +752,12 @@ app.put("/api/auth/change-password", async (req, res) => {
       { password: newPassword },
       { new: true, runValidators: false }
     );
- 
+
     res.json({
       success: true,
       message: "পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে"
     });
- 
+
   } catch (err) {
     console.error("change-password error:", err); // debug
     res.status(500).json({
