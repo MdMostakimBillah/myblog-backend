@@ -451,6 +451,46 @@ app.post("/api/ai/summary", async (req, res) => {
   }
 });
 
+
+app.get("/api/notifications/:username", async (req, res) => {
+  try {
+    const posts = await Post.find({ authorName: req.params.username })
+      .select("title likes createdAt")
+      .lean();
+
+    // সব liked userId collect করো
+    const allUserIds = [...new Set(
+      posts.flatMap(p => p.likes || [])
+    )];
+
+    // userId থেকে username আনো
+    const users = await User.find(
+      { _id: { $in: allUserIds } },
+      "username firstName lastName profilePic"
+    ).lean();
+
+    const userMap = {};
+    users.forEach(u => { userMap[u._id.toString()] = u; });
+
+    // প্রতিটি post এর জন্য notification বানাও
+    const notifications = posts
+      .filter(p => p.likes?.length > 0)
+      .flatMap(p =>
+        (p.likes || []).map(userId => ({
+          postId:    p._id,
+          postTitle: p.title,
+          user:      userMap[userId?.toString()] || null,
+          userId,
+        }))
+      )
+      .filter(n => n.user); // user না পেলে বাদ দাও
+
+    res.json({ success: true, notifications });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── Auto publish cron job ──
 // প্রতি ঘণ্টায় একবার চেক করবে
 cron.schedule("0 * * * *", async () => {
